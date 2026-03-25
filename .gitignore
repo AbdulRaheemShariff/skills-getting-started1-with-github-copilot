@@ -39,4 +39,13 @@ ehthumbs.db
 Thumbs.db
 .actrc*
 
+# Python #
 __pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller build artifacts #
+################################
+build/
+dist/
+*.spec.bak

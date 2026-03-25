@@ -3,3 +3,7 @@ uvicorn
 httpx
 watchfiles
 pytest
+pynput
+Pillow
+pyautogui
+pyinstaller
