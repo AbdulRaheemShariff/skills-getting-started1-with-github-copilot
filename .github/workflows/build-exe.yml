@@ -1,0 +1,71 @@
+name: Build Desktop Recorder Executable
+
+# Run on every push to any branch so the artifact is always available.
+# Also runs on pull requests targeting main.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  # Allow manual triggering from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: desktop_recorder
+            artifact_path: dist/desktop_recorder
+          - os: windows-latest
+            artifact_name: desktop_recorder.exe
+            artifact_path: dist/desktop_recorder.exe
+          - os: macos-latest
+            artifact_name: desktop_recorder-macos
+            artifact_path: dist/desktop_recorder
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Linux needs a virtual display for pyautogui/pynput to probe X during
+      # the PyInstaller analysis phase.
+      - name: Install virtual display (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Build executable
+        run: python build.py
+
+      # ── Upload the binary as a downloadable artifact ──────────────────────
+      # After this step completes you can find the executable by:
+      #   1. Opening the Actions tab on GitHub
+      #   2. Clicking the workflow run
+      #   3. Scrolling to the "Artifacts" section at the bottom
+      #   4. Downloading the zip that matches your OS
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+          retention-days: 30
