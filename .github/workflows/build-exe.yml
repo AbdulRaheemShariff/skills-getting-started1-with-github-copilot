@@ -55,6 +55,11 @@ jobs:
 
       - name: Build executable
         run: python build.py
+        env:
+          # Force UTF-8 I/O on Windows so Unicode characters in build output
+          # (e.g. PyInstaller log messages) never cause a UnicodeEncodeError
+          # that would crash the build and leave the Windows artifact empty.
+          PYTHONUTF8: "1"
 
       # ── Upload the binary as a downloadable artifact ──────────────────────
       # After this step completes you can find the executable by:
