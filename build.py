@@ -26,14 +26,14 @@ def main() -> None:
     repo_root = Path(__file__).parent
 
     print("=" * 60)
-    print("Desktop Recorder — PyInstaller build")
+    print("Desktop Recorder - PyInstaller build")
     print("=" * 60)
 
     # Ensure PyInstaller is available
     try:
         import PyInstaller  # noqa: F401
     except ImportError:
-        print("PyInstaller not found — installing …")
+        print("PyInstaller not found - installing ...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
     spec_file = repo_root / "desktop_recorder.spec"
@@ -63,7 +63,7 @@ def main() -> None:
     print("\n" + "=" * 60)
     if exe_path.exists():
         size_mb = exe_path.stat().st_size / (1024 * 1024)
-        print(f"Build SUCCEEDED  →  {exe_path}  ({size_mb:.1f} MB)")
+        print(f"Build SUCCEEDED -> {exe_path}  ({size_mb:.1f} MB)")
     else:
         print(f"Build completed. Look for the executable in: {repo_root / 'dist'}")
     print("=" * 60)

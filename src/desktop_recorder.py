@@ -98,13 +98,13 @@ class Session:
             "event_count": len(self.events),
             "events": [e.to_dict() for e in self.events],
         }
-        path.write_text(json.dumps(payload, indent=2))
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path | str) -> "Session":
         """Load a previously recorded session from disk."""
         path = Path(path)
-        raw = json.loads(path.read_text())
+        raw = json.loads(path.read_text(encoding="utf-8"))
         return cls(
             name=raw.get("name", ""),
             recorded_at=raw.get("recorded_at", ""),
