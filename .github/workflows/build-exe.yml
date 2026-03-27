@@ -136,7 +136,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # create/update GitHub Releases and upload release assets
+      actions: read     # required by actions/download-artifact@v4 to list artifacts via the API
 
     steps:
       - name: Download Linux artifact
