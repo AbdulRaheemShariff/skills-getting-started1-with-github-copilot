@@ -56,6 +56,37 @@ Every successful build automatically publishes the executables to the [**Release
 
 > **Tip:** If you prefer, you can also download from the [**Actions**](../../actions/workflows/build-exe.yml) tab. Open the most recent successful run, scroll to the **Artifacts** section, and click the artifact for your OS. Note that downloading workflow artifacts requires you to be signed in to GitHub.
 
+### ⚠️ Windows — "Windows protected your PC" warning
+
+The Windows executable is **signed with a self-signed certificate** (publisher: *Desktop Recorder*), but it has no established SmartScreen reputation because it is an open-source project without a paid EV code-signing certificate.  
+Windows Defender SmartScreen will show a blue security dialog the first time you run it.
+
+**Option A — bypass SmartScreen (quickest):**
+
+1. Double-click `desktop_recorder-windows.exe`.
+2. In the blue dialog, click **"More info"**.
+3. Click **"Run anyway"**.
+
+**Option B — unblock via file Properties:**
+
+1. Right-click `desktop_recorder-windows.exe`.
+2. Select **Properties**.
+3. At the bottom, check the **"Unblock"** checkbox.
+4. Click **OK**, then run the file normally.
+
+**Option C — skip SmartScreen entirely with the Python launcher:**
+
+If Python 3.12+ is already installed you can use `run_windows.bat` instead.
+Python scripts are not subject to the SmartScreen reputation check.
+
+```bat
+:: Record a session
+run_windows.bat record -o my_session.json
+
+:: Replay it
+run_windows.bat play -i my_session.json
+```
+
 #### Option 2 — Build it yourself locally
 
 ```bash

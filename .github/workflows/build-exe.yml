@@ -61,6 +61,61 @@ jobs:
           # that would crash the build and leave the Windows artifact empty.
           PYTHONUTF8: "1"
 
+      # ── Sign the Windows executable with a self-signed Authenticode cert ──
+      # This adds a publisher name ("Desktop Recorder") to the Windows
+      # security dialogs instead of showing "Unknown Publisher", and makes
+      # it clear the exe was intentionally built — not tampered with.
+      # Note: a self-signed cert does not grant SmartScreen reputation; users
+      # will still need to click "More info" → "Run anyway" the first time.
+      # See README for the full bypass guide.
+      - name: Sign Windows executable (self-signed Authenticode)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          REPO_URL: "https://github.com/${{ github.repository }}"
+        run: |
+          # Create a self-signed code-signing certificate valid for 1 year
+          $cert = New-SelfSignedCertificate `
+            -Subject "CN=Desktop Recorder" `
+            -Type CodeSigning `
+            -FriendlyName "Desktop Recorder" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -NotAfter (Get-Date).AddYears(1)
+
+          # Export to a temporary PFX so signtool can use it
+          $pfxPwd = ConvertTo-SecureString -String "TmpSignPwd!" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath signing.pfx -Password $pfxPwd | Out-Null
+
+          # Locate signtool.exe (ships with Windows SDK on GitHub-hosted runners)
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" `
+            -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like '*x64*' } |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $signtool) {
+            $signtool = Get-ChildItem "C:\Program Files\Windows Kits" `
+              -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like '*x64*' } |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if ($signtool) {
+            Write-Host "Using signtool: $signtool"
+            & $signtool sign `
+              /fd sha256 `
+              /p "TmpSignPwd!" `
+              /f signing.pfx `
+              /d "Desktop Recorder" `
+              /du $env:REPO_URL `
+              dist\desktop_recorder.exe
+            Write-Host "Signed successfully."
+          } else {
+            Write-Warning "signtool.exe not found — executable will be unsigned."
+          }
+
+          # Clean up the temporary PFX
+          Remove-Item -Force signing.pfx -ErrorAction SilentlyContinue
+
       # ── Upload the binary as a workflow artifact ──────────────────────────
       # The publish job below uses these to create a GitHub Release with
       # direct download links (no login required for public repos).
@@ -133,7 +188,21 @@ jobs:
           | `desktop_recorder-windows.exe` | Windows (x86-64) |
           | `desktop_recorder-macos` | macOS (x86-64) |
 
-          Click a file name above to download it directly. No Python installation required.
+          ---
+
+          ### ⚠️ Windows users — "Windows protected your PC" warning
+
+          The `.exe` is signed with a self-signed certificate (publisher: *Desktop Recorder*) but has no established SmartScreen reputation because it is an open-source project without a paid EV code-signing certificate. Windows will show a blue security dialog the first time you run it.
+
+          **To run it anyway:**
+          1. In the SmartScreen dialog, click **"More info"**.
+          2. Click **"Run anyway"**.
+
+          **Alternative — no SmartScreen prompt at all:**
+          If Python 3.12+ is installed, double-click `run_windows.bat` (included in the repo) instead. Python scripts are not subject to SmartScreen.
+
+          **Or unblock via Properties:**
+          Right-click the downloaded `.exe` → **Properties** → check **"Unblock"** → **OK**, then run it normally.
           NOTES
 
           gh release create latest-build \
