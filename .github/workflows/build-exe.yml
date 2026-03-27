@@ -1,0 +1,216 @@
+name: Build Desktop Recorder Executable
+
+# Run on every push to any branch so the artifact is always available.
+# Also runs on pull requests targeting main.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  # Allow manual triggering from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: desktop_recorder
+            artifact_path: dist/desktop_recorder
+          - os: windows-latest
+            artifact_name: desktop_recorder-windows
+            artifact_path: dist/desktop_recorder.exe
+          - os: macos-latest
+            artifact_name: desktop_recorder-macos
+            artifact_path: dist/desktop_recorder
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Linux needs a virtual display for pyautogui/pynput to probe X during
+      # the PyInstaller analysis phase.
+      - name: Install virtual display (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Build executable
+        run: python build.py
+        env:
+          # Force UTF-8 I/O on Windows so Unicode characters in build output
+          # (e.g. PyInstaller log messages) never cause a UnicodeEncodeError
+          # that would crash the build and leave the Windows artifact empty.
+          PYTHONUTF8: "1"
+
+      # ── Sign the Windows executable with a self-signed Authenticode cert ──
+      # This adds a publisher name ("Desktop Recorder") to the Windows
+      # security dialogs instead of showing "Unknown Publisher", and makes
+      # it clear the exe was intentionally built — not tampered with.
+      # Note: a self-signed cert does not grant SmartScreen reputation; users
+      # will still need to click "More info" → "Run anyway" the first time.
+      # See README for the full bypass guide.
+      - name: Sign Windows executable (self-signed Authenticode)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          REPO_URL: "https://github.com/${{ github.repository }}"
+        run: |
+          # Create a self-signed code-signing certificate valid for 1 year
+          $cert = New-SelfSignedCertificate `
+            -Subject "CN=Desktop Recorder" `
+            -Type CodeSigning `
+            -FriendlyName "Desktop Recorder" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -NotAfter (Get-Date).AddYears(1)
+
+          # Export to a temporary PFX so signtool can use it
+          $pfxPwd = ConvertTo-SecureString -String "TmpSignPwd!" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath signing.pfx -Password $pfxPwd | Out-Null
+
+          # Locate signtool.exe (ships with Windows SDK on GitHub-hosted runners)
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" `
+            -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like '*x64*' } |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $signtool) {
+            $signtool = Get-ChildItem "C:\Program Files\Windows Kits" `
+              -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like '*x64*' } |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if ($signtool) {
+            Write-Host "Using signtool: $signtool"
+            & $signtool sign `
+              /fd sha256 `
+              /p "TmpSignPwd!" `
+              /f signing.pfx `
+              /d "Desktop Recorder" `
+              /du $env:REPO_URL `
+              dist\desktop_recorder.exe
+            Write-Host "Signed successfully."
+          } else {
+            Write-Warning "signtool.exe not found — executable will be unsigned."
+          }
+
+          # Clean up the temporary PFX
+          Remove-Item -Force signing.pfx -ErrorAction SilentlyContinue
+
+      # ── Upload the binary as a workflow artifact ──────────────────────────
+      # The publish job below uses these to create a GitHub Release with
+      # direct download links (no login required for public repos).
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── Create a GitHub Release so binaries can be downloaded directly ───────
+  # GitHub Release assets on a public repository require no authentication,
+  # unlike workflow artifacts which redirect through Azure Blob Storage and
+  # may be silently blocked by some browsers or corporate proxies.
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create/update GitHub Releases and upload release assets
+      actions: read     # required by actions/download-artifact@v4 to list artifacts via the API
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop_recorder
+          path: release/linux/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop_recorder-windows
+          path: release/windows/
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop_recorder-macos
+          path: release/macos/
+
+      - name: Rename files for release
+        run: |
+          mv release/linux/desktop_recorder    release/desktop_recorder-linux
+          mv release/windows/desktop_recorder.exe  release/desktop_recorder-windows.exe
+          mv release/macos/desktop_recorder    release/desktop_recorder-macos
+          chmod +x release/desktop_recorder-linux release/desktop_recorder-macos
+
+      - name: Delete previous latest-build release (if any)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-build \
+            --cleanup-tag \
+            --yes \
+            --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > /tmp/release-notes.md << 'NOTES'
+          Automated build from branch `${{ github.ref_name }}` at commit `${{ github.sha }}`.
+
+          **Download your platform's binary below — no login required.**
+
+          | File | Platform |
+          |------|----------|
+          | `desktop_recorder-linux` | Linux (x86-64) |
+          | `desktop_recorder-windows.exe` | Windows (x86-64) |
+          | `desktop_recorder-macos` | macOS (x86-64) |
+
+          ---
+
+          ### ⚠️ Windows users — "Windows protected your PC" warning
+
+          The `.exe` is signed with a self-signed certificate (publisher: *Desktop Recorder*) but has no established SmartScreen reputation because it is an open-source project without a paid EV code-signing certificate. Windows will show a blue security dialog the first time you run it.
+
+          **To run it anyway:**
+          1. In the SmartScreen dialog, click **"More info"**.
+          2. Click **"Run anyway"**.
+
+          **Alternative — no SmartScreen prompt at all:**
+          If Python 3.12+ is installed, double-click `run_windows.bat` (included in the repo) instead. Python scripts are not subject to SmartScreen.
+
+          **Or unblock via Properties:**
+          Right-click the downloaded `.exe` → **Properties** → check **"Unblock"** → **OK**, then run it normally.
+          NOTES
+
+          gh release create latest-build \
+            --repo "${{ github.repository }}" \
+            --title "Latest Build" \
+            --notes-file /tmp/release-notes.md \
+            --prerelease \
+            release/desktop_recorder-linux \
+            release/desktop_recorder-windows.exe \
+            release/desktop_recorder-macos

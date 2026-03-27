@@ -3,7 +3,17 @@ uvicorn
 httpx
 watchfiles
 pytest
-pynput
-Pillow
-pyautogui
-pyinstaller
+# Input / screenshot libraries — keep minor-version compatible but avoid
+# known-broken releases.  Update these together when testing a new build.
+pynput>=1.7.6,<2.0
+pyautogui>=0.9.54,<1.0
+Pillow>=10.0.0,<12.0
+# pyautogui runtime dependencies that PyInstaller must bundle
+pyscreeze>=0.1.30,<1.0
+mouseinfo>=0.1.3,<1.0
+pygetwindow>=0.0.9,<1.0
+pymsgbox>=1.0.9,<2.0
+pyperclip>=1.8.2,<2.0
+pytweening>=1.0.4,<2.0
+# Build tooling
+pyinstaller>=6.0.0,<7.0
