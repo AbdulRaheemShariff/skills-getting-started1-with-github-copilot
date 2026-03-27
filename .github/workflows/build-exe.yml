@@ -24,7 +24,7 @@ jobs:
             artifact_name: desktop_recorder
             artifact_path: dist/desktop_recorder
           - os: windows-latest
-            artifact_name: desktop_recorder.exe
+            artifact_name: desktop_recorder-windows
             artifact_path: dist/desktop_recorder.exe
           - os: macos-latest
             artifact_name: desktop_recorder-macos

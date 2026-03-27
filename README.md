@@ -53,7 +53,7 @@ To get the binary:
    | Artifact name | Platform |
    |---|---|
    | `desktop_recorder` | Linux |
-   | `desktop_recorder.exe` | Windows |
+   | `desktop_recorder-windows` | Windows |
    | `desktop_recorder-macos` | macOS |
 
 5. Unzip the download and run the binary directly — no Python installation required.
