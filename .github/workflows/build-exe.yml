@@ -61,12 +61,9 @@ jobs:
           # that would crash the build and leave the Windows artifact empty.
           PYTHONUTF8: "1"
 
-      # ── Upload the binary as a downloadable artifact ──────────────────────
-      # After this step completes you can find the executable by:
-      #   1. Opening the Actions tab on GitHub
-      #   2. Clicking the workflow run
-      #   3. Scrolling to the "Artifacts" section at the bottom
-      #   4. Downloading the zip that matches your OS
+      # ── Upload the binary as a workflow artifact ──────────────────────────
+      # The publish job below uses these to create a GitHub Release with
+      # direct download links (no login required for public repos).
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
@@ -74,3 +71,76 @@ jobs:
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
           retention-days: 30
+
+  # ── Create a GitHub Release so binaries can be downloaded directly ───────
+  # GitHub Release assets on a public repository require no authentication,
+  # unlike workflow artifacts which redirect through Azure Blob Storage and
+  # may be silently blocked by some browsers or corporate proxies.
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop_recorder
+          path: release/linux/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop_recorder-windows
+          path: release/windows/
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop_recorder-macos
+          path: release/macos/
+
+      - name: Rename files for release
+        run: |
+          mv release/linux/desktop_recorder    release/desktop_recorder-linux
+          mv release/windows/desktop_recorder.exe  release/desktop_recorder-windows.exe
+          mv release/macos/desktop_recorder    release/desktop_recorder-macos
+          chmod +x release/desktop_recorder-linux release/desktop_recorder-macos
+
+      - name: Delete previous latest-build release (if any)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-build \
+            --cleanup-tag \
+            --yes \
+            --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > /tmp/release-notes.md << 'NOTES'
+          Automated build from branch `${{ github.ref_name }}` at commit `${{ github.sha }}`.
+
+          **Download your platform's binary below — no login required.**
+
+          | File | Platform |
+          |------|----------|
+          | `desktop_recorder-linux` | Linux (x86-64) |
+          | `desktop_recorder-windows.exe` | Windows (x86-64) |
+          | `desktop_recorder-macos` | macOS (x86-64) |
+
+          Click a file name above to download it directly. No Python installation required.
+          NOTES
+
+          gh release create latest-build \
+            --repo "${{ github.repository }}" \
+            --title "Latest Build" \
+            --notes-file /tmp/release-notes.md \
+            --prerelease \
+            release/desktop_recorder-linux \
+            release/desktop_recorder-windows.exe \
+            release/desktop_recorder-macos

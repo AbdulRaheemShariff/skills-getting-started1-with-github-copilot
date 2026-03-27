@@ -39,24 +39,22 @@ This repository also ships a **Desktop Graphics Application Recorder & Player** 
 
 ### Where to find the compiled executable
 
-#### Option 1 — Download a pre-built binary from GitHub Actions (recommended)
+#### Option 1 — Download a pre-built binary from GitHub Releases (recommended)
 
-Every push to this repository automatically triggers the **"Build Desktop Recorder Executable"** workflow, which compiles the tool for Linux, macOS, and Windows and uploads the result as a downloadable artifact.
+Every successful build automatically publishes the executables to the [**Releases**](../../releases/tag/latest-build) page as the `latest-build` pre-release. No login required to download.
 
-To get the binary:
+1. Open the [**Releases**](../../releases/tag/latest-build) page of this repository.
+2. Under the `latest-build` release, click the file for your platform:
 
-1. Open the [**Actions**](../../actions/workflows/build-exe.yml) tab of this repository.
-2. Click the most recent **Build Desktop Recorder Executable** run marked ✅.
-3. Scroll to the **Artifacts** section at the bottom of the run page.
-4. Download the zip for your operating system:
-
-   | Artifact name | Platform |
+   | File | Platform |
    |---|---|
-   | `desktop_recorder` | Linux |
-   | `desktop_recorder-windows` | Windows |
-   | `desktop_recorder-macos` | macOS |
+   | `desktop_recorder-linux` | Linux (x86-64) |
+   | `desktop_recorder-windows.exe` | Windows (x86-64) |
+   | `desktop_recorder-macos` | macOS (x86-64) |
 
-5. Unzip the download and run the binary directly — no Python installation required.
+3. Run the binary directly — no Python installation required.
+
+> **Tip:** If you prefer, you can also download from the [**Actions**](../../actions/workflows/build-exe.yml) tab. Open the most recent successful run, scroll to the **Artifacts** section, and click the artifact for your OS. Note that downloading workflow artifacts requires you to be signed in to GitHub.
 
 #### Option 2 — Build it yourself locally
 
